@@ -3,9 +3,12 @@ import pymongo
 from bson.objectid import ObjectId
 from bson.son import SON
 import atexit
+from datetime import datetime
+import math
+import re
 
-
-PAGESIZE = 25
+# Connection management
+PAGESIZE = 10
 
 CONNECTIONS = {}
 
@@ -21,12 +24,13 @@ def _close_all_connections():
 
 atexit.register(_close_all_connections)
 
+
 def connect(mongoURI, connection_name="default"):
     """
     Saves a new connection. If name is unspecified it will be "default"
     """
     global CONNECTIONS
-    CONNECTIONS[connection_name] = pymongo.MongoClient(mongoURI)
+    CONNECTIONS[connection_name] = pymongo.MongoClient(mongodb_url)
 
 
 def get_connection(connection_name="default"):
@@ -35,6 +39,18 @@ def get_connection(connection_name="default"):
     """
     global CONNECTION
     return CONNECTIONS[connection_name]
+
+# Utils
+
+
+def date_now():
+    """
+    Needed to keep the same date in python and mongo, as mongo rounds to millisecond
+    """
+    d = datetime.utcnow()
+    return d.replace(microsecond=math.floor(d.microsecond/1000)*1000)
+
+# Data functions
 
 
 def check_run_name(name, connection_name="default"):
@@ -80,7 +96,7 @@ def get_group_list(run_name=None, connection_name="default"):
             },
             {
                 "$group": {
-                    "_id": "$sample_sheet.group",
+                    "_id": "$properties.sample_info.summary.group",
                     "count": {"$sum": 1}
                 }
             }
@@ -89,7 +105,7 @@ def get_group_list(run_name=None, connection_name="default"):
         groups = list(db.samples.aggregate([
             {
                 "$group": {
-                    "_id": "$sample_sheet.group",
+                    "_id": "$properties.sample_info.summary.group",
                     "count": {"$sum": 1}
                 }
             }
@@ -100,11 +116,10 @@ def get_group_list(run_name=None, connection_name="default"):
 
 def get_species_list(species_source, run_name=None, connection_name="default"):
     connection = get_connection(connection_name)
-    db = connection.get_database()
     if species_source == "provided":
-        spe_field = "properties.provided_species"
+        spe_field = "properties.sample_info.summary.provided_species"
     else:
-        spe_field = "properties.detected_species"
+        spe_field = "properties.species_detection.summary.detected_species"
     if run_name is not None:
         run = db.runs.find_one(
             {"name": run_name},
@@ -149,192 +164,66 @@ def get_species_list(species_source, run_name=None, connection_name="default"):
     return species
 
 
-def get_qc_list(run_name=None, connection_name="default"):
-    connection = get_connection(connection_name)
-    db = connection.get_database()
-    if run_name is not None:
-        run = db.runs.find_one(
-            {"name": run_name},
-            {
-                "_id": 0,
-                "samples._id": 1
-            }
-        )
-        if run is None:
-            run_samples = []
+def filter_qc(db, qc_list, query):
+    if qc_list is None or len(qc_list) == 0:
+        return None
+    qc_query = []
+    for elem in qc_list:
+        if elem == "Not checked":
+            qc_query.append({"$and": [
+                {"properties.datafiles.summary.paired_reads": {"$exists": True}},
+                {"properties.stamper.summary.stamp.value": {"$exists": False}}
+            ]})
+        elif elem == "core facility":
+            qc_query.append({"$or": [
+                {"properties.datafiles.summary.paired_reads": {"$exists": False}},
+                {"properties.stamper.summary.stamp.value": "core facility"}
+            ]
+            })
         else:
-            run_samples = run["samples"]
-        sample_ids = [s["_id"] for s in run_samples]
-        qcs = list(db.sample_components.aggregate([
-            {
-                "$match": {
-                    "sample._id": {"$in": sample_ids},
-                    #"status": "Success",
-                    "component.name": "ssi_stamper"
-                }
-            },
-            {"$sort": {"sample._id": 1, "_id": 1}},
-            {
-                "$group": {
-                    "_id": "$sample._id",
-                    "action": {"$last": "$summary.assemblatron:action"}
-                }
-            },
-            {
-                "$group": {
-                    "_id": "$action",
-                    "count": {"$sum": 1}
-                }
-            },
-            {
-                "$sort": {"_id": 1}
-            }
-        ]))
-    else:
-        runs = list(db.runs.find({},  # {"type": "routine"},
-                                 {"samples": 1}))
-        sample_ids = set()
-        for run in runs:
-            for sample in run["samples"]:
-                sample_ids.add(sample["_id"])
-        sample_list = list(sample_ids)
-        qcs = list(db.samples.aggregate([
-            {
-                "$match": {
-                    "_id": {"$in": sample_list}
-                }
-            },
-            {
-                "$lookup": {
-                    "from": "sample_components",
-                    "let": {"sample_id": "$_id"},
-                    "pipeline": [
-                        {"$match": {
-                            "component.name": "ssi_stamper",
-                            "summary.assemblatron:action": {"$exists": True}
-                        }},
-                        {"$match": {
-                            "$expr": {"$eq": ["$sample._id", "$$sample_id"]}
-                        }
-                        },
-                        {"$project": {"summary.assemblatron:action": 1}},
-                        {"$sort": {"_id": -1}},
-                        {"$limit": 1}
-                    ],
-                    "as": "sample_components"
-                }
-            },
-            {
-                "$unwind": "$sample_components"
-            },
-            {
-                "$group": {
-                    "_id": "$sample_components.summary.assemblatron:action",
-                    "count": {"$sum": 1}
-                }
-            },
-            {
-                "$sort": {"_id": 1}
-            }
-        ]))
-
-    return qcs
+            qc_query.append({"properties.stamper.summary.stamp.value": elem})
+    return {"$match": {"$and": qc_query}}
 
 
-def filter_qc(db, qc_list, query, connection_name="default"):
-    qc_query = [
-        {"sample_components.summary.assemblatron:action": {"$in": qc_list}}]
-    if "Not checked" in qc_list:
-        qc_query += [
-            {"$and": [
-                {"reads.R1": {"$exists": True}},
-                {"$or": [
-                    {"sample_components": {"$size": 0}}
-                    # Should probably uncomment after Undetermined check is finished
-                    # {"sample_components.status": {"$ne": "Success"}}
-                ]}
-            ]}
-        ]
-    if "skipped" in qc_list:
-        qc_query += [
-            {"sample_components.status": "initialized"}
-        ]
-        # Uncomment when we implement skipped for Undetermined
-        # qc_query += [
-        #     {"sample_components.status": "skipped"}
-        # ]
-    if "core facility" in qc_list:
-        qc_query += [
-            {"reads.R1": {"$exists": False}}
-        ]
-
-    if len(qc_query) > 1:
-        qc_query = {"$or": qc_query}
-    else:
-        qc_query = qc_query[0]
-
-    result = db.samples.aggregate([
-        {
-            "$match": query,
-        },
-        {
-            "$lookup": {
-                "from": "sample_components",
-                "let": {"sample_id": "$_id"},
-                "pipeline": [
-                    {
-                        "$match": {
-                            "$expr": {
-                                "$and": [
-                                    {"$eq": ["$component.name", "ssi_stamper"]},
-                                    {"$eq": ["$sample._id", "$$sample_id"]}
-                                ]
-                            }
-                        }
-                    }
-                ],
-                "as": "sample_components"
-            }
-        },
-        {
-            "$match": qc_query
-
-        }
-    ])
-    return list(result)
-
-
-def filter(projection=None, run_name=None,
-           species=None, species_source="species",
-           group=None, qc_list=None, samples=None,
+def filter(run_names=None,
+           species=None, species_source="species", group=None,
+           qc_list=None, samples=None, pagination=None,
+           sample_names=None,
+           projection=None,
            connection_name="default"):
-    if qc_list == ["OK", "core facility", "supplying lab", "skipped", "Not checked"]:
-        qc_list = None
     if species_source == "provided":
-        spe_field = "properties.provided_species"
+        spe_field = "properties.sample_info.summary.provided_species"
     elif species_source == "detected":
-        spe_field = "properties.detected_species"
+        spe_field = "properties.species_detection.summary.detected_species"
     else:
-        spe_field = "properties.species"
+        spe_field = "properties.species_detection.summary.species"
     connection = get_connection(connection_name)
     db = connection.get_database()
     query = []
     sample_set = set()
-    if samples is not None:
+    if sample_names is not None and len(sample_names) != 0:
+        sample_names_query = []
+        for s_n in sample_names:
+            if s_n.startswith("/") and s_n.endswith("/"):
+                sample_names_query.append(re.compile(s_n[1:-1]))
+            else:
+                sample_names_query.append(s_n)
+        query.append({"name": {"$in": sample_names_query}})
+    if samples is not None and len(samples) != 0:
         sample_set = {ObjectId(id) for id in samples}
         query.append({"_id": {"$in": list(sample_set)}})
-    if run_name is not None and run_name != "":
-        run = db.runs.find_one(
-            {"name": run_name},
+    if run_names is not None and len(run_names) != 0:
+        runs = list(db.runs.find(
+            {"name": {"$in": run_names}},
             {
                 "_id": 0,
                 "samples._id": 1
             }
-        )
-        if run is None:
+        ))
+        if runs is None:
             run_sample_set = set()
         else:
-            run_sample_set = {s["_id"] for s in run['samples']}
+            run_sample_set = {s["_id"] for run in runs for s in run['samples']}
 
         if len(sample_set):
             inter = run_sample_set.intersect(sample_set)
@@ -357,37 +246,43 @@ def filter(projection=None, run_name=None,
         if "Not defined" in group:
             query.append({"$or":
                           [
-                              {"sample_sheet.group": None},
-                              {"sample_sheet.group": {"$in": group}},
-                              {"sample_sheet.group": {"$exists": False}}
+                              {"properties.sample_info.summary.group": None},
+                              {"properties.sample_info.summary.group": {"$in": group}},
+                              {"properties.sample_info.summary.group": {
+                                  "$exists": False}}
                           ]
                           })
         else:
-            query.append({"sample_sheet.group": {"$in": group}})
+            query.append(
+                {"properties.sample_info.summary.group": {"$in": group}})
+
+    if pagination is not None:
+        p_limit = pagination['page_size']
+        p_skip = pagination['page_size'] * pagination['current_page']
+    else:
+        p_limit = 1000
+        p_skip = 0
+
+    skip_limit_steps = [
+        {"$skip": p_skip}, {"$limit": p_limit}
+    ]
+
+    qc_query = filter_qc(qc_list)
 
     if len(query) == 0:
-        query = {}
+        if qc_query is None:
+            match_query = {}
+        else:
+            match_query = qc_query["$match"]
     else:
-        query = {"$and": query}
+        if qc_query is None:
+            match_query = {"$and": query}
+        else:
+            match_query = {"$and": query + qc_query["$match"]["$and"]}
+    query_result = list(db.samples.find(
+        match_query, projection).sort([('name', pymongo.ASCENDING)]).skip(p_skip).limit(p_limit))
 
-    if qc_list is not None and run_name is not None and len(qc_list) != 0:
-        #pass
-        query_result = filter_qc(db, qc_list, query)
-    else:
-        query_result = list(db.samples.find(query, projection)
-                            .sort([(spe_field, pymongo.ASCENDING), ("name", pymongo.ASCENDING)]))
     return query_result
-
-
-def get_results(sample_ids, connection_name="default"):
-    connection = get_connection(connection_name)
-    db = connection.get_database()
-    return list(db.sample_components.find({
-        "sample._id": {"$in": sample_ids},
-        "summary": {"$exists": True},
-        "status": "Success",
-        "component.name": {"$ne": "qcquickie"}  # Saving transfers
-    }, {"summary": 1, "sample._id": 1, "component.name": 1, "setup_date": 1, "status": 1}).sort([("setup_date", 1)]))
 
 
 def get_sample_runs(sample_ids, connection_name="default"):
@@ -399,7 +294,8 @@ def get_sample_runs(sample_ids, connection_name="default"):
 def get_read_paths(sample_ids, connection_name="default"):
     connection = get_connection(connection_name)
     db = connection.get_database()
-    return list(db.samples.find({"_id": {"$in": list(map(lambda x: ObjectId(x), sample_ids))}}, {"reads": 1, "name": 1}))
+    return list(db.samples.find({"_id": {"$in": list(map(lambda x: ObjectId(x), sample_ids))}},
+                                {"reads": 1, "name": 1}))
 
 
 def get_assemblies_paths(sample_ids, connection_name="default"):
@@ -411,63 +307,24 @@ def get_assemblies_paths(sample_ids, connection_name="default"):
     }, {"path": 1, "sample": 1}))
 
 
-# Run_checker.py
-def get_sample_component_status(sample_ids, connection_name="default"):
-    with get_connection(connection_name) as connection:
-        db = connection.get_database()
-        sample_ids = list(map(lambda x: ObjectId(x), sample_ids))
-        s_c_list = list(db.sample_components.aggregate([
-            {
-                "$match": {
-                    "sample._id": {
-                        "$in": sample_ids
-                    }
-                }
-            },
-            {
-                "$sort": SON([("setup_date", 1)])
-            },
-            {
-                "$group": {
-                    "_id": {
-                        "sample": "$sample._id",
-                        "component": "$component.name"
-                    },
-                    "status": {
-                        "$last": "$status"
-                    }
-                }
-            },
-            {
-                "$group": {
-                    "_id": "$_id.sample",
-                    "s_cs": {
-                        "$push": {
-                            "k": "$_id.component",
-                            "v": "$status"
-                        }
-                    }
-                }
-            },
-            {
-                "$project": {
-                    "_id": 1.0,
-                    "s_cs": {
-                        "$arrayToObject": "$s_cs"
-                    }
-                }
-            }
-        ]))
-        return s_c_list
-
-
 def get_species_QC_values(ncbi_species, connection_name="default"):
     connection = get_connection(connection_name)
     db = connection.get_database('bifrost_species')
-    if ncbi_species != "default":
-        return db.species.find_one({"ncbi_species": ncbi_species}, {"min_length": 1, "max_length": 1})
-    else:
-        return db.species.find_one({"organism": ncbi_species}, {"min_length": 1, "max_length": 1})
+    species = db.species.find_one({"ncbi_species": ncbi_species}, {
+        "min_length": 1, "max_length": 1})
+    if species is not None:
+        return species
+    species = db.species.find_one({"organism": ncbi_species}, {
+        "min_length": 1, "max_length": 1})
+    if species is not None:
+        return species
+    species = db.species.find_one({"group": ncbi_species}, {
+        "min_length": 1, "max_length": 1})
+    if species is not None:
+        return species
+    species = db.species.find_one({"organism": "default"}, {
+        "min_length": 1, "max_length": 1})
+    return species
 
 
 def get_sample_QC_status(last_runs, connection_name="default"):
@@ -477,7 +334,10 @@ def get_sample_QC_status(last_runs, connection_name="default"):
                for run in last_runs
                for sample in run["samples"]]
 
-    samples_full = get_samples(list(map(lambda x: x["_id"], samples)))
+    samples_full = db.samples.find({"_id": {"$in": list(map(lambda x: x["_id"], samples))}},
+                                   {"properties.stamper": 1,
+                                    "properties.datafiles": 1,
+                                    "name": 1})
     samples_by_ids = {str(s["_id"]): s for s in samples_full}
 
     samples_runs_qc = {}
@@ -489,26 +349,28 @@ def get_sample_QC_status(last_runs, connection_name="default"):
         name = samples_by_ids[str(sample["_id"])]["name"]
         for run in last_runs:
             for run_sample in run["samples"]:
-                if name == run_sample["name"]:
-                    sample_db = db.samples.find_one(
-                        {"_id": run_sample["_id"]}, {"reads": 1, "stamps": 1})
+                if name == samples_by_ids[str(run_sample["_id"])]["name"]:
+                    sample_db = samples_by_ids.get(
+                        str(run_sample["_id"]), None)
                     if sample_db is not None:
-                        stamps = sample_db.get("stamps", {})
-                        qc_val = stamps.get(
-                            "ssi_stamper", {}).get("value", "N/A")
-                        if qc_val == "N/A" and (not "reads" in sample_db or not "R1" in sample_db["reads"]):
+                        qc_val = sample_db.get("properties", {}).get("stamper", {}).get(
+                            "summary", {}).get("stamp", {}).get("value", "N/A")
+                        reads = sample_db.get("properties", {}).get("datafiles", {}).get(
+                            "summary", {}).get("paired_reads", [])
+
+                        if qc_val == "N/A" and not reads:
                             qc_val = "CF(LF)"
                         expert_check = False
-                        if "supplying_lab_check" in stamps and "value" in stamps["supplying_lab_check"]:
-                            qc_val = stamps["supplying_lab_check"]["value"]
-                            expert_check = True
+                        # if "supplying_lab_check" in stamps and "value" in stamps["supplying_lab_check"]:
+                        #     qc_val = stamps["supplying_lab_check"]["value"]
+                        #     expert_check = True
 
-                        if qc_val == "fail:supplying lab":
+                        if qc_val == "supplying lab":
                             qc_val = "SL"
-                        elif (qc_val == "fail:core facility" or
-                                qc_val == "fail:resequence"):
+                        elif (qc_val == "core facility" or
+                                qc_val == "resequence"):
                             qc_val = "CF"
-                        elif qc_val == "pass:OK" or qc_val == "pass:accepted":
+                        elif qc_val == "OK" or qc_val == "accepted":
                             qc_val = "OK"
 
                         if expert_check:
@@ -518,12 +380,34 @@ def get_sample_QC_status(last_runs, connection_name="default"):
     return samples_runs_qc
 
 
-def get_last_runs(run, n, connection_name="default"):
+def get_last_runs(run, n, runtype, connection_name="default"):
     connection = get_connection(connection_name)
     db = connection.get_database()
-    return list(db.runs.find({"name": {"$lte": run},
-                              "type": "routine"},
+
+    run = db.runs.find_one({"name": run})
+    run_date = run.get("metadata", {}).get("created_at")
+
+    if run_date is not None:
+        if runtype is not None:
+            query = {"metadata.created_at": {
+                "$lte": run_date}, "type": runtype}
+        else:
+            query = {"metadata.created_at": {"$lte": run_date}}
+    else:
+        if runtype is not None:
+            query = {"type": runtype}
+        else:
+            query = {}
+    return list(db.runs.find(query,
                              {"name": 1, "samples": 1}).sort([['metadata.created_at', pymongo.DESCENDING]]).limit(n))
+
+
+def get_samples(sample_id_list, projection=None, connection_name="default"):
+    connection = get_connection(connection_name)
+    db = connection.get_database()
+    if projection is None:
+        projection = {}
+    return list(db.samples.find({"_id": {"$in": sample_id_list}}, projection))
 
 
 def get_sample(sample_id, connection_name="default"):
@@ -557,22 +441,91 @@ def save_sample(data_dict, connection_name="default"):
     return data_dict
 
 
+def save_sample_component(data_dict, connection_name="default"):
+    """COPIED FROM BIFROSTLIB. Insert sample dict into mongodb.
+    Return the dict with an _id element"""
+    connection = get_connection(connection_name)
+    db = connection.get_database()
+    sample_components_db = db.sample_components
+    now = date_now()
+    data_dict["metadata"] = data_dict.get("metadata", {'created_at': now})
+    data_dict["metadata"]["updated_at"] = now
+    if "_id" in data_dict:
+        data_dict = sample_components_db.find_one_and_update(
+            filter={"_id": data_dict["_id"]},
+            update={"$set": data_dict},
+            # return new doc if one is upserted
+            return_document=pymongo.ReturnDocument.AFTER,
+            # This might change in the future. It doesnt make much sense with our current system.
+            upsert=True
+            # Import relies on this to be true.
+            # insert the document if it does not exist
+        )
+    else:
+        search_fields = {
+            "sample._id": data_dict["sample"]["_id"],
+            "component._id": data_dict["component"]["_id"],
+        }
+        data_dict = sample_components_db.find_one_and_update(
+            filter=search_fields,
+            update={
+                "$set": data_dict
+            },
+            # return new doc if one is upserted
+            return_document=pymongo.ReturnDocument.AFTER,
+            upsert=True  # insert the document if it does not exist
+        )
+    return data_dict
+
+
+def save_component(data_dict, connection_name="default"):
+    """COPIED FROM BIFROSTLIB. Insert sample dict into mongodb.
+    Return the dict with an _id element"""
+    connection = get_connection(connection_name)
+    db = connection.get_database()
+    now = date_now()
+    data_dict["metadata"] = data_dict.get("metadata", {'created_at': now})
+    data_dict["metadata"]["updated_at"] = now
+    components_db = db.components  # Collection name is samples
+    if "_id" in data_dict:
+        data_dict = components_db.find_one_and_update(
+            filter={"_id": data_dict["_id"]},
+            update={"$set": data_dict},
+            # return new doc if one is upserted
+            return_document=pymongo.ReturnDocument.AFTER,
+            upsert=True  # This might change in the future # insert the document if it does not exist
+        )
+    else:
+        data_dict = components_db.find_one_and_update(
+            filter=data_dict,
+            update={"$setOnInsert": data_dict},
+            # return new doc if one is upserted
+            return_document=pymongo.ReturnDocument.AFTER,
+            upsert=True  # insert the document if it does not exist
+        )
+    return data_dict
+
+
 def get_run(run_name, connection_name="default"):
     connection = get_connection(connection_name)
     db = connection.get_database()
     return db.runs.find_one({"name": run_name})
 
 
-def get_sample(sample_id, connection_name="default"):
+def get_component(name=None, version=None, connection_name="default"):
+    """
+    If no version is specified, it'll get the latest.
+    """
     connection = get_connection(connection_name)
     db = connection.get_database()
-    return db.samples.find_one({"_id": sample_id})
+    query = {}
+    if name is not None:
+        query["name"] = name
 
-
-def get_samples(sample_ids, connection_name="default"):
-    connection = get_connection(connection_name)
-    db = connection.get_database()
-    return list(db.samples.find({"_id": {"$in": sample_ids}}))
+    if version is not None:
+        query["version"] = version
+    return db.components.find_one(
+        query, sort=[["version", -1], ["_id", -1]])
 
 
 def get_comment(run_id, connection_name="default"):
@@ -587,7 +540,7 @@ def set_comment(run_id, comment, connection_name="default"):
     db = connection.get_database()
     ret = db.runs.find_one_and_update(
         {"_id": run_id}, {"$set": {"Comments": comment}})
-    if ret != None:
+    if ret is not None:
         return 1
     else:
         return 0
