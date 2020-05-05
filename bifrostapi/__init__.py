@@ -26,7 +26,7 @@ def connect(mongoURI, connection_name="default"):
     Saves a new connection. If name is unspecified it will be "default"
     """
     global CONNECTIONS
-    CONNECTIONS[connection_name] = pymongo.MongoClient(mongodb_url)
+    CONNECTIONS[connection_name] = pymongo.MongoClient(mongoURI)
 
 
 def get_connection(connection_name="default"):
