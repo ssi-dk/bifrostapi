@@ -116,6 +116,7 @@ def get_group_list(run_name=None, connection_name="default"):
 
 def get_species_list(species_source, run_name=None, connection_name="default"):
     connection = get_connection(connection_name)
+    db = connection.get_database()
     if species_source == "provided":
         spe_field = "properties.sample_info.summary.provided_species"
     else:
@@ -164,7 +165,7 @@ def get_species_list(species_source, run_name=None, connection_name="default"):
     return species
 
 
-def filter_qc(db, qc_list, query):
+def filter_qc(qc_list):
     if qc_list is None or len(qc_list) == 0:
         return None
     qc_query = []
