@@ -186,12 +186,34 @@ def filter_qc(qc_list):
     return {"$match": {"$and": qc_query}}
 
 
-def filter(run_names=None,
+# Need to clean this two functions
+def filter(species=None, species_source=None, group=None,
+               qc_list=None, run_names=None, sample_ids=None,
+               sample_names=None,
+               pagination=None,
+               projection=None):
+    if sample_ids is None:
+        query_result = _filter(
+            run_names=run_names, species=species,
+            species_source=species_source, group=group,
+            qc_list=qc_list,
+            sample_names=sample_names,
+            pagination=pagination,
+            projection=projection)
+    else:
+        query_result = _filter(
+            samples=sample_ids, pagination=pagination,
+            projection=projection)
+    return query_result
+
+
+def _filter(run_names=None,
            species=None, species_source="species", group=None,
            qc_list=None, samples=None, pagination=None,
            sample_names=None,
            projection=None,
            connection_name="default"):
+
     if species_source == "provided":
         spe_field = "properties.sample_info.summary.provided_species"
     elif species_source == "detected":

@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='bifrostapi',
-    version='0.0.5',
+    version='0.0.6',
     description='Datahandling functions for bifrost dashboard',
     url='https://github.com/ssi-dk/bifrostapi',
     author="Martin Basterrechea",
