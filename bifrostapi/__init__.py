@@ -10,6 +10,7 @@ import re
 # Connection management
 PAGESIZE = 10
 
+CONNECTION_URIS = {}
 CONNECTIONS = {}
 
 
@@ -25,19 +26,21 @@ def _close_all_connections():
 atexit.register(_close_all_connections)
 
 
-def connect(mongoURI, connection_name="default"):
+def add_URI(mongoURI, connection_name="default"):
     """
     Saves a new connection. If name is unspecified it will be "default"
     """
-    global CONNECTIONS
-    CONNECTIONS[connection_name] = pymongo.MongoClient(mongoURI)
+    global CONNECTION_URIS
+    CONNECTION_URIS[connection_name] = mongoURI
 
 
 def get_connection(connection_name="default"):
     """
     Returns a MongoClient object. Mostly for internal use
     """
-    global CONNECTION
+    global CONNECTIONS
+    if connection_name not in CONNECTIONS:
+        CONNECTIONS[connection_name] = pymongo.MongoClient(CONNECTION_URIS[connection_name])
     return CONNECTIONS[connection_name]
 
 # Utils
@@ -188,10 +191,11 @@ def filter_qc(qc_list):
 
 # Need to clean this two functions
 def filter(species=None, species_source=None, group=None,
-               qc_list=None, run_names=None, sample_ids=None,
-               sample_names=None,
-               pagination=None,
-               projection=None):
+           qc_list=None, run_names=None, sample_ids=None,
+           sample_names=None,
+           pagination=None,
+           projection=None,
+           connection_name="default"):
     if sample_ids is None:
         query_result = _filter(
             run_names=run_names, species=species,
@@ -199,11 +203,13 @@ def filter(species=None, species_source=None, group=None,
             qc_list=qc_list,
             sample_names=sample_names,
             pagination=pagination,
-            projection=projection)
+            projection=projection,
+            connection_name=connection_name)
     else:
         query_result = _filter(
             samples=sample_ids, pagination=pagination,
-            projection=projection)
+            projection=projection,
+            connection_name=connection_name)
     return query_result
 
 

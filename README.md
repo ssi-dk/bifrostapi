@@ -12,8 +12,9 @@ pip install bifrostapi
 
 ```python
 import bifrostapi
+# Call this once before making any other calls.
+bifrostapi.add_URI("mongodb://user:pass@hostname:27017/dbname")
 
-bifrostapi.connect("mongodb://user:pass@hostname:27017/dbname")
 bifrostapi.get_run_list()
 
 ```
@@ -23,8 +24,8 @@ Or with multiple databases:
 ```python
 import bifrostapi
 
-bifrostapi.connect("mongodb://user:pass@hostname:27017/dbname", "db1")
-bifrostapi.connect("mongodb://user:pass@hostname:27017/dbname", "db2")
+bifrostapi.add_URI("mongodb://user:pass@hostname:27017/dbname", "db1")
+bifrostapi.add_URI("mongodb://user:pass@hostname:27017/dbname", "db2")
 
 bifrostapi.get_run_list(connection_name="db1")
 
