@@ -13,6 +13,15 @@ PAGESIZE = 10
 CONNECTION_URIS = {}
 CONNECTIONS = {}
 
+# FIELDS
+FLD = {
+    "provided_species": "properties.sample_info.summary.provided_species",
+    "detected_species": "properties.species_detection.summary.detected_species",
+    "species": "properties.species_detection.summary.species",
+    "date_sequenced": "properties.sample_info.summary.BatchRunDate",
+    "group": "properties.sample_info.summary.group",
+}
+
 
 def _close_all_connections():
     """
@@ -99,7 +108,7 @@ def get_group_list(run_name=None, connection_name="default"):
             },
             {
                 "$group": {
-                    "_id": "$properties.sample_info.summary.group",
+                    "_id": "${group}".format(**FLD),
                     "count": {"$sum": 1}
                 }
             }
@@ -108,7 +117,7 @@ def get_group_list(run_name=None, connection_name="default"):
         groups = list(db.samples.aggregate([
             {
                 "$group": {
-                    "_id": "$properties.sample_info.summary.group",
+                    "_id": "${group}".format(**FLD),
                     "count": {"$sum": 1}
                 }
             }
@@ -121,9 +130,9 @@ def get_species_list(species_source, run_name=None, connection_name="default"):
     connection = get_connection(connection_name)
     db = connection.get_database()
     if species_source == "provided":
-        spe_field = "properties.sample_info.summary.provided_species"
+        spe_field = FLD["provided_species"]
     else:
-        spe_field = "properties.species_detection.summary.detected_species"
+        spe_field = FLD["detected_species"]
     if run_name is not None:
         run = db.runs.find_one(
             {"name": run_name},
@@ -191,7 +200,7 @@ def filter_qc(qc_list):
 
 # Need to clean this two functions
 def filter(species=None, species_source=None, group=None,
-           qc_list=None, run_names=None, sample_ids=None,
+           qc_list=None, date_range=None, run_names=None, sample_ids=None,
            sample_names=None,
            pagination=None,
            projection=None,
@@ -201,11 +210,13 @@ def filter(species=None, species_source=None, group=None,
             run_names=run_names, species=species,
             species_source=species_source, group=group,
             qc_list=qc_list,
+            date_range=date_range,
             sample_names=sample_names,
             pagination=pagination,
             projection=projection,
             connection_name=connection_name)
     else:
+        # sample ids prevent other filters from working.
         query_result = _filter(
             samples=sample_ids, pagination=pagination,
             projection=projection,
@@ -214,18 +225,18 @@ def filter(species=None, species_source=None, group=None,
 
 
 def _filter(run_names=None,
-           species=None, species_source="species", group=None,
-           qc_list=None, samples=None, pagination=None,
-           sample_names=None,
-           projection=None,
-           connection_name="default"):
+            species=None, species_source="species", group=None,
+            qc_list=None, date_range=None, samples=None, pagination=None,
+            sample_names=None,
+            projection=None,
+            connection_name="default"):
 
     if species_source == "provided":
-        spe_field = "properties.sample_info.summary.provided_species"
+        spe_field = FLD["provided_species"]
     elif species_source == "detected":
-        spe_field = "properties.species_detection.summary.detected_species"
+        spe_field = FLD["detected_species"]
     else:
-        spe_field = "properties.species_detection.summary.species"
+        spe_field = FLD["species"]
     connection = get_connection(connection_name)
     db = connection.get_database()
     query = []
@@ -259,6 +270,13 @@ def _filter(run_names=None,
             query.append({"_id": {"$in": list(inter)}})
         else:
             query.append({"_id": {"$in": list(run_sample_set)}})
+    if date_range is not None and len(date_range) == 2:
+        date_range_query = {}
+        if date_range[0] is not None:
+            date_range_query["$gte"] = date_range[0]
+        if date_range[1] is not None:
+            date_range_query["$lt"] = date_range[1]
+        query.append({FLD["date_sequenced"]: date_range_query})
     if species is not None and len(species) != 0:
 
         if "Not classified" in species:
@@ -275,26 +293,23 @@ def _filter(run_names=None,
         if "Not defined" in group:
             query.append({"$or":
                           [
-                              {"properties.sample_info.summary.group": None},
-                              {"properties.sample_info.summary.group": {"$in": group}},
-                              {"properties.sample_info.summary.group": {
+                              {FLD["group"]: None},
+                              {FLD["group"]: {"$in": group}},
+                              {FLD["group"]: {
                                   "$exists": False}}
                           ]
                           })
         else:
             query.append(
-                {"properties.sample_info.summary.group": {"$in": group}})
+                {FLD["group"]: {"$in": group}})
 
     if pagination is not None:
+        print(pagination)
         p_limit = pagination['page_size']
         p_skip = pagination['page_size'] * pagination['current_page']
     else:
         p_limit = 1000
         p_skip = 0
-
-    skip_limit_steps = [
-        {"$skip": p_skip}, {"$limit": p_limit}
-    ]
 
     qc_query = filter_qc(qc_list)
 
