@@ -70,7 +70,7 @@ def check_run_name(name, connection_name="default"):
     db = connection.get_database()
     # Fastest.
     run = db.runs.find({"name": name}).limit(1).count(True)
-    return run is not 0
+    return run != 0
 
 
 def get_run_list(connection_name="default"):
@@ -323,6 +323,7 @@ def _filter(run_names=None,
             match_query = {"$and": query}
         else:
             match_query = {"$and": query + qc_query["$match"]["$and"]}
+    print("debug query": match_query)
     query_result = list(db.samples.find(
         match_query, projection).sort([('name', pymongo.ASCENDING)]).skip(p_skip).limit(p_limit))
 
