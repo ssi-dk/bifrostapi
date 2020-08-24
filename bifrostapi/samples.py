@@ -5,7 +5,6 @@ from bson.objectid import ObjectId
 from .utils import get_connection, FLD
 
 
-
 def get_samples(sample_id_list, projection=None, connection_name="default"):
     connection = get_connection(connection_name)
     db = connection.get_database()

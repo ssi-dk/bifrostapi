@@ -83,11 +83,12 @@ def create_virtual_run(name, ip, samples, connection_name="default"):
     # Verify run doesn't exist
 
     if check_run_name(name):
-        raise ValueError(f"Run with name {name} already exists in db.")
-    
+        raise ValueError()
+        
+    event = [ip, "Create " + ",".join([x["_id"] for x in samples])]
+
     # Convert sample list
-    
-    samples = [{"_id": ObjectId(s["id"]), "name": s["name"]} for s in samples]
+    samples = [{"_id": ObjectId(s["_id"]), "name": s["name"]} for s in samples]
 
     run = {
         "name": name,
@@ -96,13 +97,65 @@ def create_virtual_run(name, ip, samples, connection_name="default"):
         "metadata": {
             "created_at": date_now(),
             "updated_at": date_now(),
-            "schema_version": 2.0
+            "schema_version": 2.0,
+            "modified_by": [event]
         },
-        "type": "virtual",
-        "created_by": ip
+        "type": "virtual"
     }
     connection = get_connection(connection_name)
     db = connection.get_database()
     rid = db.runs.insert_one(run).inserted_id
-    print(rid)
     return rid
+
+
+def add_samples_to_virtual_run(name, ip, samples, connection_name="default"):
+    """
+    Adds samples to virtual run, check that samples don't exist in the run before.
+    """
+    connection = get_connection(connection_name)
+    db = connection.get_database()
+    run = db.runs.find_one({"name": name, "type": "virtual"})
+    if run is None:
+        raise ValueError("Virtual run not found")
+    run_samples = run["samples"]
+    # Convert sample list
+    samples = [{"_id": ObjectId(s["_id"]), "name": s["name"]} for s in samples]
+    for s in samples:
+        if s not in run_samples:
+            run_samples.append(s)
+    event = [ip, "Add " + ",".join([x["_id"] for x in samples])]
+    db.runs.find_one_and_update({"name": name}, {
+        "$push": {
+            "metadata.modified_by": event,
+        },
+        "$set": {"samples": run_samples}
+    })
+
+
+def remove_samples_from_virtual_run(name, ip, sample_ids, connection_name="default"):
+    """
+    Adds samples to virtual run, check that samples don't exist in the run before.
+    """
+    connection = get_connection(connection_name)
+    db = connection.get_database()
+    run = db.runs.find_one({"name": name, "type": "virtual"})
+    if run is None:
+        raise ValueError("Virtual run not found")
+    run_new_samples = [s for s in run["samples"]
+                       if str(s["_id"]) not in sample_ids]
+    if len(run_new_samples) == 0:
+        run_new_type = "virtual-deleted"
+    else:
+        run_new_type = run["type"]
+
+    event = [ip, "Remove " + ",".join(sample_ids)]
+
+    db.runs.find_one_and_update({"name": name}, {
+        "$push": {
+            "metadata.modified_by": event,
+        },
+        "$set": {
+            "samples": run_new_samples,
+            "type": run_new_type
+        }
+    })
