@@ -5,7 +5,38 @@ from bson.objectid import ObjectId
 from .utils import get_connection, FLD
 
 
-def get_samples(sample_id_list, projection=None, connection_name="default"):
+def get_all_samples(connection_name = "default"):
+    connection = get_connection(connection_name)
+    db = connection.get_database()
+    pipeline = [{'$project': {'_id'      : '$_id',
+                              'name'     : '$name',
+                              'read1_md5': '$categories.paired_reads.summary.read1_md5'}}]
+    return list(db.samples.aggregate(pipeline))
+
+
+def get_allele_profiles(sample_id_list: list = None, schema_name: str = 'enterobase_senterica_cgmlst', connection_name = "default"):
+    connection = get_connection(connection_name)
+    db = connection.get_database()
+    pipeline = [
+        {'$match': {
+            "$and": [
+                {'categories.cgmlst.summary.allele_qc': 'PASS'},
+                {'categories.cgmlst.report.chewiesnake.run_metadata.database_information.scheme_name': schema_name}
+            ]}
+        },
+        {'$project': {'_id'           : '$_id',
+                      'name'          : '$name',
+                      'display_name'  : '$display_name',
+                      'hashid'        : '$categories.cgmlst.summary.hashid',
+                      'allele_profile': '$categories.cgmlst.report.chewiesnake.allele_profile'}
+         }
+    ]
+    if sample_id_list is not None:
+        pipeline[0]['$match']['$and'].insert(0, {'_id': {'$in': sample_id_list}})
+    return list(db.samples.aggregate(pipeline))
+
+
+def get_samples(sample_id_list, projection = None, connection_name = "default"):
     connection = get_connection(connection_name)
     db = connection.get_database()
     if projection is None:
@@ -13,13 +44,13 @@ def get_samples(sample_id_list, projection=None, connection_name="default"):
     return list(db.samples.find({"_id": {"$in": sample_id_list}}, projection))
 
 
-def get_sample(sample_id, connection_name="default"):
+def get_sample(sample_id, connection_name = "default"):
     connection = get_connection(connection_name)
     db = connection.get_database()
     return db.samples.find_one({"_id": sample_id})
 
 
-def save_sample(data_dict, connection_name="default"):
+def save_sample(data_dict, upsert: bool = False, connection_name = "default"):
     """COPIED FROM BIFROSTLIB Insert sample dict into mongodb.
     Return the dict with an _id element"""
     connection = get_connection(connection_name)
@@ -27,24 +58,24 @@ def save_sample(data_dict, connection_name="default"):
     samples_db = db.samples  # Collection name is samples
     if "_id" in data_dict:
         data_dict = samples_db.find_one_and_update(
-            filter={"_id": data_dict["_id"]},
-            update={"$set": data_dict},
+            filter = {"_id": data_dict["_id"]},
+            update = {"$set": data_dict},
             # return new doc if one is upserted
-            return_document=pymongo.ReturnDocument.AFTER,
-            upsert=False  # insert the document if it does not exist
+            return_document = pymongo.ReturnDocument.AFTER,
+            upsert = upsert  # insert the document if it does not exist, HB: to copy from one to another DB, upsert has to be True
         )
     else:
         data_dict = samples_db.find_one_and_update(
-            filter=data_dict,
-            update={"$setOnInsert": data_dict},
+            filter = data_dict,
+            update = {"$setOnInsert": data_dict},
             # return new doc if one is upserted
-            return_document=pymongo.ReturnDocument.AFTER,
-            upsert=True  # insert the document if it does not exist
+            return_document = pymongo.ReturnDocument.AFTER,
+            upsert = True  # insert the document if it does not exist
         )
     return data_dict
 
 
-def get_sample_runs(sample_ids, connection_name="default"):
+def get_sample_runs(sample_ids, connection_name = "default"):
     """
     Returns runs that contain a given sample
     """
@@ -53,23 +84,23 @@ def get_sample_runs(sample_ids, connection_name="default"):
     return list(db.runs.find({"samples": {"$elemMatch": {"_id": {"$in": sample_ids}}}}))
 
 
-def get_read_paths(sample_ids, connection_name="default"):
+def get_read_paths(sample_ids, connection_name = "default"):
     connection = get_connection(connection_name)
     db = connection.get_database()
     return list(db.samples.find({"_id": {"$in": list(map(lambda x: ObjectId(x), sample_ids))}},
                                 {"reads": 1, "name": 1}))
 
 
-def get_assemblies_paths(sample_ids, connection_name="default"):
+def get_assemblies_paths(sample_ids, connection_name = "default"):
     connection = get_connection(connection_name)
     db = connection.get_database()
     return list(db.sample_components.find({
-        "sample._id": {"$in": list(map(lambda x: ObjectId(x), sample_ids))},
+        "sample._id"    : {"$in": list(map(lambda x: ObjectId(x), sample_ids))},
         "component.name": "assemblatron"
     }, {"path": 1, "sample": 1}))
 
 
-def get_sample_QC_status(last_runs, connection_name="default"):
+def get_sample_QC_status(last_runs, connection_name = "default"):
     connection = get_connection(connection_name)
     db = connection.get_database()
     samples = [sample
@@ -77,9 +108,9 @@ def get_sample_QC_status(last_runs, connection_name="default"):
                for sample in run["samples"]]
 
     samples_full = db.samples.find({"_id": {"$in": list(map(lambda x: x["_id"], samples))}},
-                                   {"properties.stamper": 1,
+                                   {"properties.stamper"  : 1,
                                     "properties.datafiles": 1,
-                                    "name": 1})
+                                    "name"                : 1})
     samples_by_ids = {str(s["_id"]): s for s in samples_full}
 
     samples_runs_qc = {}
@@ -109,7 +140,7 @@ def get_sample_QC_status(last_runs, connection_name="default"):
                         if qc_val == "supplying lab":
                             qc_val = "SL"
                         elif (qc_val == "core facility" or
-                                qc_val == "resequence"):
+                              qc_val == "resequence"):
                             qc_val = "CF"
                         elif qc_val == "OK" or qc_val == "accepted":
                             qc_val = "OK"
@@ -143,38 +174,37 @@ def filter_qc(qc_list):
 
 
 # Need to clean this two functions
-def filter(species=None, species_source=None, group=None,
-           qc_list=None, date_range=None, run_names=None, sample_ids=None,
-           sample_names=None,
-           pagination=None,
-           projection=None,
-           connection_name="default"):
+def filter(species = None, species_source = None, group = None,
+           qc_list = None, date_range = None, run_names = None, sample_ids = None,
+           sample_names = None,
+           pagination = None,
+           projection = None,
+           connection_name = "default"):
     if sample_ids is None:
         query_result = _filter(
-            run_names=run_names, species=species,
-            species_source=species_source, group=group,
-            qc_list=qc_list,
-            date_range=date_range,
-            sample_names=sample_names,
-            pagination=pagination,
-            projection=projection,
-            connection_name=connection_name)
+            run_names = run_names, species = species,
+            species_source = species_source, group = group,
+            qc_list = qc_list,
+            date_range = date_range,
+            sample_names = sample_names,
+            pagination = pagination,
+            projection = projection,
+            connection_name = connection_name)
     else:
         # sample ids prevent other filters from working.
         query_result = _filter(
-            samples=sample_ids, pagination=pagination,
-            projection=projection,
-            connection_name=connection_name)
+            samples = sample_ids, pagination = pagination,
+            projection = projection,
+            connection_name = connection_name)
     return query_result
 
 
-def _filter(run_names=None,
-            species=None, species_source="species", group=None,
-            qc_list=None, date_range=None, samples=None, pagination=None,
-            sample_names=None,
-            projection=None,
-            connection_name="default"):
-
+def _filter(run_names = None,
+            species = None, species_source = "species", group = None,
+            qc_list = None, date_range = None, samples = None, pagination = None,
+            sample_names = None,
+            projection = None,
+            connection_name = "default"):
     if species_source == "provided":
         spe_field = FLD["provided_species"]
     elif species_source == "detected":
@@ -200,7 +230,7 @@ def _filter(run_names=None,
         runs = list(db.runs.find(
             {"name": {"$in": run_names}},
             {
-                "_id": 0,
+                "_id"        : 0,
                 "samples._id": 1
             }
         ))
@@ -225,24 +255,24 @@ def _filter(run_names=None,
 
         if "Not classified" in species:
             query.append({"$or":
-                          [
-                              {spe_field: None},
-                              {spe_field: {"$in": species}},
-                              {spe_field: {"$exists": False}}
-                          ]
-                          })
+                [
+                    {spe_field: None},
+                    {spe_field: {"$in": species}},
+                    {spe_field: {"$exists": False}}
+                ]
+            })
         else:
             query.append({spe_field: {"$in": species}})
     if group is not None and len(group) != 0:
         if "Not defined" in group:
             query.append({"$or":
-                          [
-                              {FLD["group"]: None},
-                              {FLD["group"]: {"$in": group}},
-                              {FLD["group"]: {
-                                  "$exists": False}}
-                          ]
-                          })
+                [
+                    {FLD["group"]: None},
+                    {FLD["group"]: {"$in": group}},
+                    {FLD["group"]: {
+                        "$exists": False}}
+                ]
+            })
         else:
             query.append(
                 {FLD["group"]: {"$in": group}})
@@ -272,14 +302,14 @@ def _filter(run_names=None,
     return query_result
 
 
-def get_group_list(run_name=None, connection_name="default"):
+def get_group_list(run_name = None, connection_name = "default"):
     connection = get_connection(connection_name)
     db = connection.get_database()
     if run_name is not None:
         run = db.runs.find_one(
             {"name": run_name},
             {
-                "_id": 0,
+                "_id"        : 0,
                 "samples._id": 1
             }
         )
@@ -296,7 +326,7 @@ def get_group_list(run_name=None, connection_name="default"):
             },
             {
                 "$group": {
-                    "_id": "${group}".format(**FLD),
+                    "_id"  : "${group}".format(**FLD),
                     "count": {"$sum": 1}
                 }
             }
@@ -305,7 +335,7 @@ def get_group_list(run_name=None, connection_name="default"):
         groups = list(db.samples.aggregate([
             {
                 "$group": {
-                    "_id": "${group}".format(**FLD),
+                    "_id"  : "${group}".format(**FLD),
                     "count": {"$sum": 1}
                 }
             }

@@ -4,15 +4,15 @@ from bson.objectid import ObjectId
 from .utils import get_connection, date_now
 
 
-def check_run_name(name, connection_name="default"):
+def check_run_name(name, connection_name = "default"):
     connection = get_connection(connection_name)
     db = connection.get_database()
     # Fastest.
-    run = db.runs.find({"name": name}).limit(1).count(True)
+    run = db.runs.find({"name": name}).explain().get('executionStats', None).get('nReturned', 0)
     return run != 0
 
 
-def get_run_list(run_type=None, connection_name="default"):
+def get_run_list(run_type = None, connection_name = "default"):
     connection = get_connection(connection_name)
     db = connection.get_database()
     if run_type is None:
@@ -22,13 +22,13 @@ def get_run_list(run_type=None, connection_name="default"):
     else:
         query = {"type": run_type}
     runs = list(db.runs.find(query,
-                             {"name": 1,
-                              "_id": 0,
+                             {"name"   : 1,
+                              "_id"    : 0,
                               "samples": 1}).sort([['metadata.created_at', pymongo.DESCENDING]]))
     return runs
 
 
-def get_last_runs(run, n, runtype, connection_name="default"):
+def get_last_runs(run, n, runtype, connection_name = "default"):
     connection = get_connection(connection_name)
     db = connection.get_database()
 
@@ -38,7 +38,7 @@ def get_last_runs(run, n, runtype, connection_name="default"):
     if run_date is not None:
         if runtype is not None:
             query = {"metadata.created_at": {
-                "$lte": run_date}, "type": runtype}
+                "$lte": run_date}, "type" : runtype}
         else:
             query = {"metadata.created_at": {"$lte": run_date}}
     else:
@@ -50,20 +50,20 @@ def get_last_runs(run, n, runtype, connection_name="default"):
                              {"name": 1, "samples": 1}).sort([['metadata.created_at', pymongo.DESCENDING]]).limit(n))
 
 
-def get_run(run_name, connection_name="default"):
+def get_run(run_name, connection_name = "default"):
     connection = get_connection(connection_name)
     db = connection.get_database()
     return db.runs.find_one({"name": run_name})
 
 
-def get_comment(run_id, connection_name="default"):
+def get_comment(run_id, connection_name = "default"):
     connection = get_connection(connection_name)
     db = connection.get_database()
     return db.runs.find_one(
         {"_id": run_id}, {"Comments": 1})
 
 
-def set_comment(run_id, comment, connection_name="default"):
+def set_comment(run_id, comment, connection_name = "default"):
     connection = get_connection(connection_name)
     db = connection.get_database()
     ret = db.runs.find_one_and_update(
@@ -74,33 +74,33 @@ def set_comment(run_id, comment, connection_name="default"):
         return 0
 
 
-def create_virtual_run(name, ip, samples, connection_name="default"):
+def create_virtual_run(name, ip, samples, connection_name = "default"):
     """
     Create virtual run. No files, only in db.
     Name is string
     Samples is list of dict with name and id
     """
-    # Verify run doesn't exist
 
-    if check_run_name(name):
+    # Verify run doesn't exist
+    if check_run_name(name = name, connection_name = connection_name):
         raise ValueError()
-        
-    event = [ip, "Create " + ",".join([x["_id"] for x in samples])]
+
+    event = [ip, "Create " + ",".join([str(x["_id"]) for x in samples])]
 
     # Convert sample list
-    samples = [{"_id": ObjectId(s["_id"]), "name": s["name"]} for s in samples]
+    samples = [{"name": s["name"], "_id": ObjectId(s["_id"])} for s in samples]
 
     run = {
-        "name": name,
-        "samples": samples,
+        "name"      : name,
+        "samples"   : samples,
         "components": [],
-        "metadata": {
-            "created_at": date_now(),
-            "updated_at": date_now(),
+        "metadata"  : {
+            "created_at"    : date_now(),
+            "updated_at"    : date_now(),
             "schema_version": 2.0,
-            "modified_by": [event]
+            "modified_by"   : [event]
         },
-        "type": "virtual"
+        "type"      : "virtual"
     }
     connection = get_connection(connection_name)
     db = connection.get_database()
@@ -108,7 +108,7 @@ def create_virtual_run(name, ip, samples, connection_name="default"):
     return rid
 
 
-def add_samples_to_virtual_run(name, ip, samples, connection_name="default"):
+def add_samples_to_virtual_run(name, ip, samples, connection_name = "default"):
     """
     Adds samples to virtual run, check that samples don't exist in the run before.
     """
@@ -119,20 +119,20 @@ def add_samples_to_virtual_run(name, ip, samples, connection_name="default"):
         raise ValueError("Virtual run not found")
     run_samples = run["samples"]
     # Convert sample list
-    samples = [{"_id": ObjectId(s["_id"]), "name": s["name"]} for s in samples]
+    samples = [{"_id": ObjectId(s["_id"]), "name": s["name"]} for s in samples]  # HB: strip payload from samples arg object
     for s in samples:
         if s not in run_samples:
             run_samples.append(s)
-    event = [ip, "Add " + ",".join([x["_id"] for x in samples])]
+    event = [ip, "Add " + ",".join([str(x["_id"]) for x in samples])]
     db.runs.find_one_and_update({"name": name}, {
         "$push": {
             "metadata.modified_by": event,
         },
-        "$set": {"samples": run_samples}
+        "$set" : {"samples": run_samples}
     })
 
 
-def remove_samples_from_virtual_run(name, ip, sample_ids, connection_name="default"):
+def remove_samples_from_virtual_run(name, ip, sample_ids, connection_name = "default"):
     """
     Adds samples to virtual run, check that samples don't exist in the run before.
     """
@@ -154,8 +154,8 @@ def remove_samples_from_virtual_run(name, ip, sample_ids, connection_name="defau
         "$push": {
             "metadata.modified_by": event,
         },
-        "$set": {
+        "$set" : {
             "samples": run_new_samples,
-            "type": run_new_type
+            "type"   : run_new_type
         }
     })

@@ -1,7 +1,7 @@
 from .utils import get_connection, FLD
 
 
-def get_species_list(species_source, run_name=None, connection_name="default"):
+def get_species_list(species_source, run_name = None, connection_name = "default"):
     connection = get_connection(connection_name)
     db = connection.get_database()
     if species_source == "provided":
@@ -12,7 +12,7 @@ def get_species_list(species_source, run_name=None, connection_name="default"):
         run = db.runs.find_one(
             {"name": run_name},
             {
-                "_id": 0,
+                "_id"        : 0,
                 "samples._id": 1
             }
         )
@@ -29,7 +29,7 @@ def get_species_list(species_source, run_name=None, connection_name="default"):
             },
             {
                 "$group": {
-                    "_id": "$" + spe_field,
+                    "_id"  : "$" + spe_field,
                     "count": {"$sum": 1}
                 }
             },
@@ -41,7 +41,7 @@ def get_species_list(species_source, run_name=None, connection_name="default"):
         species = list(db.samples.aggregate([
             {
                 "$group": {
-                    "_id": "$" + spe_field,
+                    "_id"  : "$" + spe_field,
                     "count": {"$sum": 1}
                 }
             },
@@ -52,7 +52,7 @@ def get_species_list(species_source, run_name=None, connection_name="default"):
     return species
 
 
-def get_species_QC_values(ncbi_species, connection_name="default"):
+def get_species_QC_values(ncbi_species, connection_name = "default"):
     connection = get_connection(connection_name)
     db = connection.get_database('bifrost_species')
     species = db.species.find_one({"ncbi_species": ncbi_species}, {
