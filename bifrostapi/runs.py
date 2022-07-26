@@ -51,9 +51,17 @@ def get_last_runs(run, n, runtype, connection_name = "default"):
 
 
 def get_run(run_name, connection_name = "default"):
+    # Return only one run or None.
     connection = get_connection(connection_name)
     db = connection.get_database()
     return db.runs.find_one({"name": run_name})
+
+
+def get_runs(run_name, connection_name = "default"):
+    # Return a list of runs or None.
+    connection = get_connection(connection_name)
+    db = connection.get_database()
+    return db.runs.find({"name": run_name})
 
 
 def get_comment(run_id, connection_name = "default"):
