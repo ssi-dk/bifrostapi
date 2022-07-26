@@ -39,7 +39,6 @@ for run_sample in run['samples']:
 print("OK to delete these samples from the samples collection. OK? (y/n)")
 answer = input()
 if answer not in ['y', 'Y']:
-    print("No changes were made to the database.")
     exit()
 else:
     print("Deleting sample documents...")
@@ -51,7 +50,6 @@ else:
 print("OK to delete run document? (y/n)")
 answer = input()
 if answer not in ['y', 'Y']:
-    print("No changes were made to the database.")
     exit()
 else:
     print("Deleting run document")
