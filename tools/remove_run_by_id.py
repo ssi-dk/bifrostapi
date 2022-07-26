@@ -17,6 +17,8 @@ if run is None:
     print(f"ERROR: no run exists with id {args.run_id}")
     exit(1)
 print(f"Preparing to remove a run document with name {run['name']} and related documents.")
+
+# Sample documents
 print("The run document refers these samples (name consistency is being checked):")
 print("Object id, name")
 for run_sample in run['samples']:
@@ -43,6 +45,8 @@ else:
     for run_sample in run['samples']:
         print(run_sample['_id'])
         bifrostapi.samples.delete_sample_by_id(run_sample['_id'])
+
+# Run document
 print("OK to delete run document? (y/n)")
 answer = input()
 if answer not in ['y', 'Y']:
