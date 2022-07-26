@@ -20,7 +20,7 @@ print(f"Preparing to remove a run document with name {run['name']} and related d
 
 # Sample documents
 print("The run document refers these samples (name consistency is being checked):")
-print("Object id, name")
+print("Sample name, sample component names")
 for run_sample in run['samples']:
     sample = bifrostapi.samples.get_sample_by_id(run_sample['_id'])
     if sample is None:
@@ -33,7 +33,8 @@ for run_sample in run['samples']:
         print(f"Sample name is {sample['name']}")
         exit(3)
     else:
-        print(run_sample['_id'], run_sample['name'])
+        component_names = [component['name'] for component in sample['components']]
+        print(sample['name'], component_names)
 
 print("OK to delete these samples from the samples collection. OK? (y/n)")
 answer = input()
