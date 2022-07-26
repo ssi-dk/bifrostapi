@@ -2,7 +2,10 @@ from os import getenv
 from sys import exit
 import argparse
 
+import pymongo
+
 import bifrostapi
+from bifrostapi import sample_components
 
 # Call this once before making any other calls.
 bifrostapi.add_URI(getenv('MONGO_CONNECTION'))
@@ -35,6 +38,11 @@ for run_sample in run['samples']:
     else:
         component_names = [component['name'] for component in sample['components']]
         print(sample['name'], component_names)
+    # Sample component documents
+    sample_components = list(bifrostapi.sample_components.find_sample_component_ids_by_sample_id(sample['_id']))
+    sample_component_object_ids = [sc['_id'] for sc in sample_components]
+    for oid in sample_component_object_ids:
+        bifrostapi.sample_components.delete_sample_component_by_id(oid)
 
 print("OK to delete these samples from the samples collection. OK? (y/n)")
 answer = input()
