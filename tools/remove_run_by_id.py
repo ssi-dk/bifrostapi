@@ -22,7 +22,6 @@ if run is None:
 print(f"Preparing to remove a run document with name {run['name']} and related documents.")
 
 # Sample documents
-print("The run document refers these samples (name consistency is being checked):")
 for run_sample in run['samples']:
     sample = bifrostapi.samples.get_sample_by_id(run_sample['_id'])
     if sample is None:
@@ -44,21 +43,11 @@ for run_sample in run['samples']:
         bifrostapi.sample_components.delete_sample_component_by_id(oid)
     print(f"Deleted {len(sample_components)} documents from sample_components collection")
 
-print("OK to delete these samples from the samples collection. OK? (y/n)")
-answer = input()
-if answer not in ['y', 'Y']:
-    exit()
-else:
-    print("Deleting sample documents...")
-    for run_sample in run['samples']:
-        print(run_sample['_id'])
-        bifrostapi.samples.delete_sample_by_id(run_sample['_id'])
+print("Deleting sample documents...")
+for run_sample in run['samples']:
+    print(run_sample['_id'])
+    bifrostapi.samples.delete_sample_by_id(run_sample['_id'])
 
 # Run document
-print("OK to delete run document? (y/n)")
-answer = input()
-if answer not in ['y', 'Y']:
-    exit()
-else:
-    print("Deleting run document")
-    bifrostapi.runs.delete_run_by_id(run['_id'])
+print("Deleting run document")
+bifrostapi.runs.delete_run_by_id(run['_id'])
