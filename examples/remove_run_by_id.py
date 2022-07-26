@@ -1,11 +1,17 @@
 from os import getenv
 from sys import exit
+import argparse
+
 import bifrostapi
 
 # Call this once before making any other calls.
 bifrostapi.add_URI(getenv('MONGO_CONNECTION'))
 
-run_id = input("Run id: ")
+parser = argparse.ArgumentParser(description='Interactive script for removing a run and related objects from MongoDB')
+parser.add_argument('run_id', type=str, nargs=1,
+                    help='The MongoDB _id field of the run object')
+args = parser.parse_args()
+
 run = bifrostapi.runs.get_run_by_id(run_id)
 print(f"Preparing to remove run with name {run['name']}...")
 print("The run document refers these samples (name consistency is being checked):")
