@@ -13,7 +13,7 @@ try:
     while True:
         print()
         run = next(runs)
-        print(f"Run _id: {run['_id']}")
+        print(f"Run id: {run['_id']}")
         print(f"Created at: {run['metadata']['created_at']}")
         print("Samples:")
         for sample in run['samples']:
