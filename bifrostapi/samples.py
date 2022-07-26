@@ -75,6 +75,19 @@ def save_sample(data_dict, upsert: bool = False, connection_name = "default"):
     return data_dict
 
 
+
+def get_sample_by_id(sample_id, connection_name = "default"):
+    connection = get_connection(connection_name)
+    db = connection.get_database()
+    return db.samples.find_one({"_id": ObjectId(sample_id)})
+
+
+def delete_sample_by_id(sample_id, connection_name = "default"):
+    connection = get_connection(connection_name)
+    db = connection.get_database()
+    return db.samples.delete_one({"_id": ObjectId(sample_id)})
+
+
 def get_sample_runs(sample_ids, connection_name = "default"):
     """
     Returns runs that contain a given sample

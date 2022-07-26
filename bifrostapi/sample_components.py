@@ -1,4 +1,5 @@
 import pymongo
+from bson.objectid import ObjectId
 
 from .utils import get_connection, date_now
 
@@ -40,3 +41,15 @@ def save_sample_component(data_dict, connection_name = "default"):
         )
 
     return data_dict
+
+
+def get_sample_component_by_id(sample_component_id, connection_name = "default"):
+    connection = get_connection(connection_name)
+    db = connection.get_database()
+    return db.sample_components.find_one({"_id": ObjectId(sample_component_id)})
+
+
+def delete_sample_component_by_id(sample_component_id, connection_name = "default"):
+    connection = get_connection(connection_name)
+    db = connection.get_database()
+    return db.sample_components.delete_one({"_id": ObjectId(sample_component_id)})
