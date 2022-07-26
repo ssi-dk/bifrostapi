@@ -63,6 +63,12 @@ def get_runs(run_name, connection_name = "default"):
     db = connection.get_database()
     return db.runs.find({"name": run_name})
 
+def get_run_by_id(run_id, connection_name = "default"):
+    # Return a list of runs or None.
+    connection = get_connection(connection_name)
+    db = connection.get_database()
+    return db.runs.find_one({"_id": run_id})
+
 
 def get_comment(run_id, connection_name = "default"):
     connection = get_connection(connection_name)
