@@ -7,14 +7,15 @@ import bifrostapi
 # Call this once before making any other calls.
 bifrostapi.add_URI(getenv('MONGO_CONNECTION'))
 
-parser = argparse.ArgumentParser(description='Interactive script for removing a run and related objects from MongoDB')
-parser.add_argument('run_id', type=str, nargs=1,
-                    help='The MongoDB _id field of the run object')
+parser = argparse.ArgumentParser(
+    description='Interactive script for removing a run and related objects from MongoDB')
+parser.add_argument('run_id', type=str, help='The MongoDB _id field of the run object')
 args = parser.parse_args()
 
-run = bifrostapi.runs.get_run_by_id(run_id)
-print(f"Preparing to remove run with name {run['name']}...")
+run = bifrostapi.runs.get_run_by_id(args.run_id)
+print(f"Preparing to remove a run document with name {run['name']} and related documents.")
 print("The run document refers these samples (name consistency is being checked):")
+print("Object id, name")
 for run_sample in run['samples']:
     sample = bifrostapi.samples.get_sample_by_id(run_sample['_id'])
     if sample is None:
