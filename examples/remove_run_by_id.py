@@ -29,4 +29,9 @@ for run_sample in run['samples']:
         exit(2)
     else:
         print(run_sample['_id'], run_sample['name'])
-    
+
+print("These samples will be deleted from the samples collection. OK? (y/n)")
+answer = input()
+if answer not in ['y', 'Y']:
+    print("No changes were made to the database.")
+    exit()
