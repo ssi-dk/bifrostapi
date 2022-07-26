@@ -30,8 +30,13 @@ for run_sample in run['samples']:
     else:
         print(run_sample['_id'], run_sample['name'])
 
-print("These samples will be deleted from the samples collection. OK? (y/n)")
+print("OK to delete these samples from the samples collection. OK? (y/n)")
 answer = input()
 if answer not in ['y', 'Y']:
     print("No changes were made to the database.")
     exit()
+else:
+    print("Deleting sample documents...")
+    for run_sample in run['samples']:
+        print(run_sample['_id'])
+        bifrostapi.samples.delete_sample_by_id(run_sample['_id'])
