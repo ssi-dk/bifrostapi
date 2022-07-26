@@ -13,7 +13,10 @@ try:
     while True:
         print()
         run = next(runs)
-        print(f"_id: {run['_id']}")
+        print(f"Run _id: {run['_id']}")
+        print("Samples:")
+        for sample in run['samples']:
+            print(sample)
         run_count += 1
 except StopIteration:
     print(f"Found {run_count} runs.")
