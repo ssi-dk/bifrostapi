@@ -9,7 +9,7 @@ from bifrostapi import sample_components
 bifrostapi.add_URI(getenv('MONGO_CONNECTION'))
 
 parser = argparse.ArgumentParser(
-    description='Interactive script for removing a run and related objects from MongoDB')
+    description='Script for removing a run and related objects from MongoDB')
 parser.add_argument('run_id', type=str, help='The MongoDB _id field of the run object')
 args = parser.parse_args()
 
