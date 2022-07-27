@@ -26,11 +26,11 @@ if not answer in ['Y', 'y']:
 for run_sample in run['samples']:
     sample = bifrostapi.samples.get_sample_by_id(run_sample['_id'])
     if sample is None:
-        print(f"ERROR: a sample that was referenced in run did not exist in samples collection:")
+        print(f"Consistency warning: a sample that is referenced in the run does not exist in samples collection:")
         print(run_sample)
         exit(2)
     if run_sample['name'] != sample['name']:
-        print(f"ERROR: name consistency check failed for sample id {run_sample['_id']}.")
+        print(f"Consistency warning: name consistency check failed for sample id {run_sample['_id']}.")
         print(f"Run sample name is {run_sample['name']}")
         print(f"Sample name is {sample['name']}")
         exit(3)
