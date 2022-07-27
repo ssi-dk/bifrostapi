@@ -11,7 +11,7 @@ bifrostapi.add_URI(getenv('MONGO_CONNECTION'))
 parser = argparse.ArgumentParser(
     description='Script for removing a run and related objects from MongoDB')
 parser.add_argument('run_id', type=str, help='The MongoDB _id field of the run object')
-parser.add_argument('--force', default=False, action='store_true', help='Continue deletion when inconsistences are found')
+parser.add_argument('--fake', default=False, action='store_true', help='Do not really delete anything.')
 args = parser.parse_args()
 
 run = bifrostapi.runs.get_run_by_id(args.run_id)
@@ -28,15 +28,11 @@ for run_sample in run['samples']:
     if sample is None:
         print(f"Consistency warning: a sample that is referenced in the run does not exist in samples collection:")
         print(run_sample)
-        if not args.force:
-            exit(2)
     else:
         if run_sample['name'] != sample['name']:
             print(f"Consistency warning: name consistency check failed for sample id {run_sample['_id']}.")
             print(f"Run sample name is {run_sample['name']}")
             print(f"Sample name is {sample['name']}")
-            if not args.force:
-                exit(3)
     
         component_names = [component['name'] for component in sample['components']]
         print ("Sample [Components]:")
