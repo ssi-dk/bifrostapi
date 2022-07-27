@@ -23,7 +23,7 @@ def get_run_list(run_type = None, connection_name = "default"):
         query = {"type": run_type}
     runs = list(db.runs.find(query,
                              {"name"   : 1,
-                              "_id"    : 0,
+                              "_id"    : 1,
                               "samples": 1}).sort([['metadata.created_at', pymongo.DESCENDING]]))
     return runs
 

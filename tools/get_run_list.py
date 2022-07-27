@@ -6,4 +6,4 @@ bifrostapi.add_URI(getenv('MONGO_CONNECTION'))
 
 runs = bifrostapi.runs.get_run_list()
 for run in runs:
-    print(run['name'])
+    print(run['_id'], run['name'])
