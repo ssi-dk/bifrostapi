@@ -54,5 +54,5 @@ for run_sample in run['samples']:
     bifrostapi.samples.delete_sample_by_id(run_sample['_id'])
 
 # Run document
-print("Deleting run document")
+print(f"Deleting run document with id {run['_id']}")
 bifrostapi.runs.delete_run_by_id(run['_id'])
