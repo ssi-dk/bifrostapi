@@ -41,6 +41,7 @@ for run_sample in run['samples']:
     
          # Sample component documents
         component_names = [component['name'] for component in sample['components']]
+        print ("Sample [Components]:")
         print(sample['name'], component_names)
         sample_components = list(bifrostapi.sample_components.find_sample_component_ids_by_sample_id(sample['_id']))
         sample_component_object_ids = [sc['_id'] for sc in sample_components]
