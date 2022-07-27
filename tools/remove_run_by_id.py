@@ -2,8 +2,6 @@ from os import getenv
 from sys import exit
 import argparse
 
-import pymongo
-
 import bifrostapi
 from bifrostapi import sample_components
 
