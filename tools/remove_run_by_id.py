@@ -17,7 +17,10 @@ run = bifrostapi.runs.get_run_by_id(args.run_id)
 if run is None:
     print(f"ERROR: no run exists with id {args.run_id}")
     exit(1)
-print(f"Preparing to remove a run document with name {run['name']} and related documents.")
+print(f"This will remove a run document with name {run['name']} and related documents in samples and sample_components.")
+answer = input("Continue (y/n)? ")
+if not answer in ['Y', 'y']:
+    exit()
 
 # Sample documents
 for run_sample in run['samples']:
