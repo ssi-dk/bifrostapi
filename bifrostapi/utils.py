@@ -1,4 +1,3 @@
-from .ssh_pymongo import MongoSession
 import math
 from datetime import datetime
 
@@ -40,12 +39,8 @@ def get_connection(connection_name = "default"):
     """
     global CONNECTIONS
     if connection_name not in CONNECTIONS:
-        if isinstance(CONNECTION_URIS[connection_name], dict):
-            CONNECTIONS[connection_name] = MongoSession(
-                **CONNECTION_URIS[connection_name]).connection
-        else:
-            CONNECTIONS[connection_name] = pymongo.MongoClient(
-                CONNECTION_URIS[connection_name])
+        CONNECTIONS[connection_name] = pymongo.MongoClient(
+            CONNECTION_URIS[connection_name])
     return CONNECTIONS[connection_name]
 
 
