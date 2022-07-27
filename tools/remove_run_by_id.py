@@ -23,7 +23,6 @@ answer = input("Continue (y/n)? ")
 if not answer in ['Y', 'y']:
     exit()
 
-# Sample documents
 for run_sample in run['samples']:
     sample = bifrostapi.samples.get_sample_by_id(run_sample['_id'])
     if sample is None:
@@ -39,21 +38,22 @@ for run_sample in run['samples']:
             if not args.force:
                 exit(3)
     
-         # Sample component documents
         component_names = [component['name'] for component in sample['components']]
         print ("Sample [Components]:")
         print(sample['name'], component_names)
         sample_components = list(bifrostapi.sample_components.find_sample_component_ids_by_sample_id(sample['_id']))
         sample_component_object_ids = [sc['_id'] for sc in sample_components]
         for oid in sample_component_object_ids:
+            # Delete sample_component document
             bifrostapi.sample_components.delete_sample_component_by_id(oid)
         print(f"Deleted {len(sample_components)} documents from sample_components collection")
 
 print("Deleting sample documents...")
 for run_sample in run['samples']:
     print(run_sample['_id'])
+    # Delete sample document
     bifrostapi.samples.delete_sample_by_id(run_sample['_id'])
 
-# Run document
+# Delete run document
 print(f"Deleting run document with id {run['_id']}")
 bifrostapi.runs.delete_run_by_id(run['_id'])
