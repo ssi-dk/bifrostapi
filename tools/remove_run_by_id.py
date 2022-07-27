@@ -46,14 +46,13 @@ for run_sample in run['samples']:
         for oid in sample_component_object_ids:
             # Delete sample_component document
             bifrostapi.sample_components.delete_sample_component_by_id(oid)
-        print(f"Deleted {len(sample_components)} documents from sample_components collection")
+        print(f"Deleted {len(sample_components)} sample_component documents")
 
-print("Deleting sample documents...")
 for run_sample in run['samples']:
-    print(run_sample['_id'])
     # Delete sample document
     bifrostapi.samples.delete_sample_by_id(run_sample['_id'])
+    print(f"Deleted sample document with id {run_sample['_id']}")
 
 # Delete run document
-print(f"Deleting run document with id {run['_id']}")
 bifrostapi.runs.delete_run_by_id(run['_id'])
+print(f"Deleted run document with id {run['_id']}")
