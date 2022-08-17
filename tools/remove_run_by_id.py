@@ -1,5 +1,3 @@
-#!/usr/bin/python3
-
 from os import getenv
 from sys import exit
 import argparse
